@@ -70,5 +70,6 @@ void teams_buddy_unblock(PurpleConnection *pc, const char *name);
 gboolean teams_check_authrequests(TeamsAccount *sa);
 
 void teams_set_mood_message(TeamsAccount *sa, const gchar *mood);
+PurpleChat *teams_find_chat(PurpleAccount *account, const char *id);
 
 #endif /* TEAMS_CONTACTS_H */

@@ -1968,6 +1968,13 @@ teams_get_friend_list_teams_cb(TeamsAccount *sa, JsonNode *node, gpointer user_d
 				
 			}
 			
+			if (title != NULL && *title != '\0') {
+				PurpleChatConversation *chatconv = purple_conversations_find_chat_with_account(id, sa->account);
+				if (chatconv != NULL) {
+					purple_conversation_set_title(PURPLE_CONVERSATION(chatconv), title);
+				}
+			}
+			
 			if (!TEAMS_CHAT_IS_MEETING(id)) {
 				JsonArray *members = json_object_get_array_member(chat, "members");
 				guint members_index, members_length = json_array_get_length(members);
@@ -2455,6 +2462,7 @@ teams_calendar_timer_cb(gpointer user_data)
 
 			if (data->subject && *data->subject) {
 				purple_chat_conversation_set_topic(chatconv, NULL, data->subject);
+				purple_conversation_set_title(PURPLE_CONVERSATION(chatconv), data->subject);
 			}
 			
 			teams_get_conversation_history(sa, chatname);

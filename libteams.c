@@ -356,6 +356,17 @@ teams_join_chat(PurpleConnection *pc, GHashTable *data)
 	chatconv = purple_serv_got_joined_chat(pc, g_str_hash(chatname), chatname);
 	purple_conversation_set_data(PURPLE_CONVERSATION(chatconv), "chatname", g_strdup(chatname));
 	
+	PurpleChat *chat = teams_find_chat(sa->account, chatname);
+	if (chat != NULL) {
+		const gchar *title = purple_chat_get_alias(chat);
+		if (title == NULL || *title == '\0') {
+			title = purple_chat_get_name(chat);
+		}
+		if (title != NULL && *title != '\0' && !purple_strequal(title, chatname)) {
+			purple_conversation_set_title(PURPLE_CONVERSATION(chatconv), title);
+		}
+	}
+	
 	purple_conversation_present(PURPLE_CONVERSATION(chatconv));
 }
 
@@ -422,8 +433,87 @@ teams_node_menu(PurpleBlistNode *node)
 }
 
 static gulong conversation_updated_signal = 0;
+static gulong conversation_updated_title_signal = 0;
 static gulong chat_conversation_typing_signal = 0;
 static gulong im_conversation_created_signal = 0;
+
+static void
+teams_conversation_updated_title(PurpleConversation *conv, PurpleConversationUpdateType type)
+{
+	PurpleConnection *pc;
+	TeamsAccount *sa;
+	const gchar *chatname;
+	const gchar *cur_title;
+	const gchar *prettier_title = NULL;
+	PurpleChat *chat;
+
+	if (type != PURPLE_CONVERSATION_UPDATE_TITLE) {
+		return;
+	}
+
+	if (!PURPLE_IS_CHAT_CONVERSATION(conv)) {
+		return;
+	}
+
+	pc = purple_conversation_get_connection(conv);
+	if (pc == NULL || !PURPLE_CONNECTION_IS_CONNECTED(pc)) {
+		return;
+	}
+
+	if (!purple_strequal(purple_protocol_get_id(purple_connection_get_protocol(pc)), 
+#ifdef ENABLE_TEAMS_PERSONAL
+		TEAMS_PERSONAL_PLUGIN_ID
+#else
+		TEAMS_PLUGIN_ID
+#endif
+	) {
+		return;
+	}
+
+	sa = purple_connection_get_protocol_data(pc);
+	if (sa == NULL) {
+		return;
+	}
+
+	chatname = purple_conversation_get_data(conv, "chatname");
+	if (chatname == NULL) {
+		chatname = purple_conversation_get_name(conv);
+	}
+	if (chatname == NULL) {
+		return;
+	}
+
+	/* 1. Check if the chat is in the buddy list and has an alias/title */
+	chat = teams_find_chat(sa->account, chatname);
+	if (chat != NULL) {
+		prettier_title = purple_chat_get_alias(chat);
+		if (prettier_title == NULL || *prettier_title == '\0') {
+			prettier_title = purple_chat_get_name(chat);
+		}
+	}
+
+	/* 2. Check if the chat conversation has a topic (threadtopic / meeting subject) */
+	if (prettier_title == NULL || *prettier_title == '\0' || purple_strequal(prettier_title, chatname)) {
+		const gchar *topic = purple_chat_conversation_get_topic(PURPLE_CHAT_CONVERSATION(conv));
+		if (topic != NULL && *topic != '\0') {
+			prettier_title = topic;
+		}
+	}
+
+	/* 3. Check if a custom title was stored on the conversation */
+	if (prettier_title == NULL || *prettier_title == '\0' || purple_strequal(prettier_title, chatname)) {
+		prettier_title = purple_conversation_get_data(conv, "title");
+	}
+
+	if (prettier_title == NULL || *prettier_title == '\0' || purple_strequal(prettier_title, chatname)) {
+		return;
+	}
+
+	cur_title = purple_conversation_get_title(conv);
+	if (!purple_strequal(cur_title, prettier_title)) {
+		purple_conversation_set_title(conv, prettier_title);
+	}
+}
 
 static void
 teams_im_conversation_created(PurpleConversation *conv)
@@ -525,6 +615,9 @@ teams_login(PurpleAccount *account)
 	
 	if (!conversation_updated_signal) {
 		conversation_updated_signal = purple_signal_connect(purple_conversations_get_handle(), "conversation-updated", purple_connection_get_protocol(pc), PURPLE_CALLBACK(teams_mark_conv_seen), NULL);
+	}
+	if (!conversation_updated_title_signal) {
+		conversation_updated_title_signal = purple_signal_connect(purple_conversations_get_handle(), "conversation-updated", purple_connection_get_protocol(pc), PURPLE_CALLBACK(teams_conversation_updated_title), NULL);
 	}
 	if (!chat_conversation_typing_signal) {
 		chat_conversation_typing_signal = purple_signal_connect(purple_conversations_get_handle(), "chat-conversation-typing", purple_connection_get_protocol(pc), PURPLE_CALLBACK(teams_conv_send_typing), NULL);

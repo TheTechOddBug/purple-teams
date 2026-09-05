@@ -507,13 +507,33 @@ process_message_resource(TeamsAccount *sa, JsonObject *resource)
 			chatconv = purple_serv_got_joined_chat(sa->pc, g_str_hash(chatname), chatname);
 			purple_conversation_set_data(PURPLE_CONVERSATION(chatconv), "chatname", g_strdup(chatname));
 
+			PurpleChat *purple_chat = teams_find_chat(sa->account, chatname);
+			if (purple_chat != NULL) {
+				const gchar *title = purple_chat_get_alias(purple_chat);
+				if (title == NULL || *title == '\0') {
+					title = purple_chat_get_name(purple_chat);
+				}
+				if (title != NULL && *title != '\0' && !purple_strequal(title, chatname)) {
+					purple_conversation_set_title(PURPLE_CONVERSATION(chatconv), title);
+				}
+			}
+
 			if (json_object_has_member(resource, "threadtopic")) {
 				topic = json_object_get_string_member(resource, "threadtopic");
 				purple_chat_conversation_set_topic(chatconv, NULL, topic);
+				if (topic != NULL && *topic != '\0') {
+					purple_conversation_set_title(PURPLE_CONVERSATION(chatconv), topic);
+				}
 			}
 			
 			teams_get_conversation_history(sa, chatname);
 			teams_get_thread_users(sa, chatname);
+		} else if (json_object_has_member(resource, "threadtopic")) {
+			topic = json_object_get_string_member(resource, "threadtopic");
+			if (topic != NULL && *topic != '\0') {
+				purple_chat_conversation_set_topic(chatconv, NULL, topic);
+				purple_conversation_set_title(PURPLE_CONVERSATION(chatconv), topic);
+			}
 		}
 		GString *chat_last_timestamp = make_last_timestamp_setting(convname);
 		purple_account_set_int(sa->account, chat_last_timestamp->str, composetimestamp);
@@ -844,6 +864,9 @@ process_message_resource(TeamsAccount *sa, JsonObject *resource)
 			
 			username = teams_strip_user_prefix(username);
 			purple_chat_conversation_set_topic(chatconv, username, value);
+			if (value != NULL && *value != '\0') {
+				purple_conversation_set_title(conv, value);
+			}
 			purple_conversation_update(conv, PURPLE_CONVERSATION_UPDATE_TOPIC);
 				
 			g_free(initiator);
@@ -1543,6 +1566,16 @@ teams_got_thread_users(TeamsAccount *sa, JsonNode *node, gpointer user_data)
 	if (node == NULL || json_node_get_node_type(node) != JSON_NODE_OBJECT)
 		return;
 	response = json_node_get_object(node);
+
+	const gchar *thread_topic = json_object_get_string_member(response, "topic");
+	if (thread_topic == NULL && json_object_has_member(response, "properties")) {
+		JsonObject *props = json_object_get_object_member(response, "properties");
+		thread_topic = json_object_get_string_member(props, "topic");
+	}
+	if (thread_topic != NULL && *thread_topic != '\0') {
+		purple_chat_conversation_set_topic(chatconv, NULL, thread_topic);
+		purple_conversation_set_title(PURPLE_CONVERSATION(chatconv), thread_topic);
+	}
 	
 	members = json_object_get_array_member(response, "members");
 	length = json_array_get_length(members);
@@ -2997,6 +3030,9 @@ teams_chat_set_topic(PurpleConnection *pc, int id, const char *topic)
 	GString *url;
 
 	chatconv = purple_conversations_find_chat(pc, id);
+	if (chatconv != NULL && topic != NULL && *topic != '\0') {
+		purple_conversation_set_title(PURPLE_CONVERSATION(chatconv), topic);
+	}
 	chatname = purple_conversation_get_data(PURPLE_CONVERSATION(chatconv), "chatname");
 	
 	url = g_string_new(TEAMS_CONTACTS_PATH_PREFIX "/v1/threads/");

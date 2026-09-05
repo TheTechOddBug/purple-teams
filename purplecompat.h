@@ -82,6 +82,7 @@ purple_blist_node_set_transient(PurpleBlistNode *node, gboolean transient)
 #define purple_connection_get_flags(pc)         ((pc)->flags)
 
 #define PurpleConversationUpdateType       PurpleConvUpdateType
+#define PURPLE_CONVERSATION_UPDATE_TITLE   PURPLE_CONV_UPDATE_TITLE
 #define PURPLE_CONVERSATION_UPDATE_TOPIC   PURPLE_CONV_UPDATE_TOPIC
 #define PURPLE_CONVERSATION_UPDATE_UNSEEN  PURPLE_CONV_UPDATE_UNSEEN
 #define PurpleChatConversation             PurpleConvChat
