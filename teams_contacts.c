@@ -1892,6 +1892,9 @@ teams_get_friend_list_teams_cb(TeamsAccount *sa, JsonNode *node, gpointer user_d
 	{
 		JsonObject *chat = json_array_get_object_element(chats, index);
 		const gchar *id = json_object_get_string_member(chat, "id");
+		if (TEAMS_BUDDY_IS_NOTIFICATIONS(id) && !purple_strequal(id, "48:notes")) {
+			continue;
+		}
 		gboolean is_one_on_one = json_object_get_boolean_member(chat, "isOneOnOne");
 		JsonObject *relationshipState = json_object_get_object_member(chat, "relationshipState");
 

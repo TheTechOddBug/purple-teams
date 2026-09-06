@@ -504,6 +504,11 @@ process_message_resource(TeamsAccount *sa, JsonObject *resource)
 		
 		chatconv = purple_conversations_find_chat_with_account(chatname, sa->account);
 		if (!chatconv) {
+			if (properties != NULL && json_object_has_member(properties, "deletetime")) {
+				g_free(convname);
+				g_strfreev(messagetype_parts);
+				return;
+			}
 			chatconv = purple_serv_got_joined_chat(sa->pc, g_str_hash(chatname), chatname);
 			purple_conversation_set_data(PURPLE_CONVERSATION(chatconv), "chatname", g_strdup(chatname));
 
@@ -679,8 +684,11 @@ process_message_resource(TeamsAccount *sa, JsonObject *resource)
 				
 			if (properties != NULL) {
 				if (json_object_has_member(properties, "deletetime")) {
+					purple_conversation_write_system_message(conv, _("User deleted their message"), PURPLE_MESSAGE_NO_LOG);
 					g_free(html);
-					html = g_strconcat("<b>", _("User deleted their message"), "</b>", NULL);
+					g_free(convname);
+					g_strfreev(messagetype_parts);
+					return;
 				}
 				
 				if (json_object_has_member(properties, "emotions")) {
@@ -954,6 +962,14 @@ process_message_resource(TeamsAccount *sa, JsonObject *resource)
 			from = teams_contact_url_to_name(json_object_get_string_member(resource, "from"));
 		}
 		
+		if ((TEAMS_BUDDY_IS_NOTIFICATIONS(convbuddyname) && !purple_strequal(convbuddyname, "48:notes")) ||
+		    (TEAMS_BUDDY_IS_NOTIFICATIONS(from) && !purple_strequal(from, "48:notes"))) {
+			g_free(convbuddyname);
+			g_free(convname);
+			g_strfreev(messagetype_parts);
+			return;
+		}
+		
 		if (convbuddyname == NULL && strstr(convname, "@unq.gbl.spaces")) {
 			if (teams_is_user_self(sa, from)) {
 				// Try to guess the other person from the chat id
@@ -1079,7 +1095,7 @@ process_message_resource(TeamsAccount *sa, JsonObject *resource)
 				}
 			}
 			
-			if (html != NULL && *html && !purple_strequal(convbuddyname, "48:calllogs") && !purple_strequal(convbuddyname, "48:annotations")) {
+			if (html != NULL && *html) {
 				const gchar *modified_convbuddyname = convbuddyname;
 				//Handle self-send messages
 				if (purple_strequal(convbuddyname, "48:notes")) {
@@ -1091,6 +1107,17 @@ process_message_resource(TeamsAccount *sa, JsonObject *resource)
 				}
 				
 				imconv = purple_conversations_find_im_with_account(modified_convbuddyname, sa->account);
+				if (properties != NULL && json_object_has_member(properties, "deletetime")) {
+					if (imconv != NULL) {
+						purple_conversation_write_system_message(PURPLE_CONVERSATION(imconv), _("User deleted their message"), PURPLE_MESSAGE_NO_LOG);
+					}
+					g_free(html);
+					g_free(convbuddyname);
+					g_free(convname);
+					g_strfreev(messagetype_parts);
+					return;
+				}
+
 				if (imconv == NULL)
 				{
 					imconv = purple_im_conversation_new(sa->account, modified_convbuddyname);
@@ -1858,6 +1885,9 @@ teams_got_all_convs(TeamsAccount *sa, JsonNode *node, gpointer user_data)
 	for(index = 0; index < length; index++) {
 		JsonObject *conversation = json_array_get_object_element(conversations, index);
 		const gchar *id = json_object_get_string_member(conversation, "id");
+		if (TEAMS_BUDDY_IS_NOTIFICATIONS(id) && !purple_strequal(id, "48:notes")) {
+			continue;
+		}
 		JsonObject *lastMessage = json_object_get_object_member(conversation, "lastMessage");
 		
 		if (lastMessage != NULL && json_object_has_member(lastMessage, "composetime")) {

@@ -460,13 +460,13 @@ teams_conversation_updated_title(PurpleConversation *conv, PurpleConversationUpd
 		return;
 	}
 
-	if (!purple_strequal(purple_protocol_get_id(purple_connection_get_protocol(pc)), 
 #ifdef ENABLE_TEAMS_PERSONAL
-		TEAMS_PERSONAL_PLUGIN_ID
+	const gchar *expected_plugin_id = TEAMS_PERSONAL_PLUGIN_ID;
 #else
-		TEAMS_PLUGIN_ID
+	const gchar *expected_plugin_id = TEAMS_PLUGIN_ID;
 #endif
-	) {
+
+	if (!purple_strequal(purple_protocol_get_id(purple_connection_get_protocol(pc)), expected_plugin_id)) {
 		return;
 	}
 
